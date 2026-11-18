@@ -10,7 +10,7 @@ dependencies = []
 [dependency-groups]
 dev = [
     "pytest>=9.0",
-    "pytest-socket>=0.7",
+    "pytest-socket>=0.8.1",
     "ruff>=0.14",
     "mypy>=1.18",
 ]
