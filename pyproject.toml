@@ -1,0 +1,42 @@
+[project]
+name = "speedtest-cli"
+version = "1.0.0"
+description = "Sequential download speed measurement for a single URL, standard library only"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.13"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0",
+    "pytest-socket>=0.7",
+    "ruff>=0.14",
+    "mypy>=1.18",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "S"]
+
+[tool.ruff.lint.per-file-ignores]
+"speedtest.py" = ["S310"]
+"tests/**" = ["S101"]
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.pytest.ini_options]
+strict = true
+addopts = "--disable-socket --allow-hosts=127.0.0.1,::1"
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.mypy]
+strict = true
+python_version = "3.13"
