@@ -140,7 +140,13 @@ sockets suite-wide. Coverage is enforced at 100% by `pytest-cov`.
 
 ## AI usage
 
-The code was drafted by an AI coding assistant from a written specification.
+The code was drafted by AI coding assistants from a written specification.
+The models that took part:
+
+- **Claude Sonnet 5.5**
+- **Qwen3.8 Flash Next**
+- **GLM 5.3 Flash**
+
 The author reviewed every change and verified the result manually: real runs
 against a live URL, a cross-check against `curl`, and exit-code checks.
 
