@@ -94,7 +94,7 @@ Timings use `time.perf_counter()` (monotonic clock).
   error, or non-2xx status aborts the run with a clear message and no
   traceback. Averaging a partial run would misrepresent the link.
 - **Exit codes:** `0` success, `1` network/HTTP error, `2` bad arguments or
-  URL.
+  URL, `130` interrupted with Ctrl+C.
 - **Content-Length check:** if the header disagrees with the bytes read, a
   warning is printed (sign of a truncated transfer).
 - Redirects are followed (urllib default).
@@ -136,7 +136,7 @@ pytest
 
 Tests never touch the external network: they run against a local
 `http.server` on the loopback interface, and `pytest-socket` blocks all other
-sockets suite-wide.
+sockets suite-wide. Coverage is enforced at 100% by `pytest-cov`.
 
 ## AI usage
 
