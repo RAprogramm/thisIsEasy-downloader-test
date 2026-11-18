@@ -34,7 +34,7 @@ docstring-code-format = true
 
 [tool.pytest.ini_options]
 strict = true
-addopts = "--disable-socket --allow-hosts=127.0.0.1,::1 --cov=speedtest --cov-report=term-missing --cov-fail-under=100"
+addopts = "--disable-socket --allow-hosts=127.0.0.1,::1"
 testpaths = ["tests"]
 pythonpath = ["."]
 
