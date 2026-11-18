@@ -123,7 +123,7 @@ Install the dev dependencies once — with uv (`uv sync`) or plain pip
 pytest
 ```
 
-33 tests, no external network, ~5 s. Bare `pytest` without these plugins
+36 tests, no external network, ~5 s. Bare `pytest` without these plugins
 fails on the CLI options, so install them first. The CI workflow enforces
 100% coverage; to check it locally, run:
 
