@@ -113,7 +113,16 @@ Timings use `time.perf_counter()` (monotonic clock).
 
 ## Development
 
-Using [uv](https://docs.astral.sh/uv/):
+Install the dev dependencies once — with uv (`uv sync`) or plain pip
+(`pip install pytest pytest-cov pytest-socket`) — then the fastest check is:
+
+```bash
+pytest
+```
+
+32 tests, no external network, ~5 s, 100% coverage enforced.
+
+Full lint, type-check, and test suite using [uv](https://docs.astral.sh/uv/):
 
 ```bash
 uv sync
@@ -127,7 +136,7 @@ Without uv (plain Python ≥ 3.13):
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install pytest pytest-socket ruff mypy
+pip install pytest pytest-cov pytest-socket ruff mypy
 ruff check .
 ruff format --check .
 mypy speedtest.py tests
