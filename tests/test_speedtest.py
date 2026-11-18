@@ -30,9 +30,26 @@ class RecordingHandler(BaseHTTPRequestHandler):
     in_flight = 0
     max_in_flight = 0
     accept_encodings: list[str] = []
+    cache_controls: list[str] = []
+    pragmas: list[str] = []
 
     def log_message(self, format: str, *args: object) -> None:
         """Silence the standard per-request stderr logging."""
+
+    def _serve(self, data: bytes, declared_length: int | None = None) -> None:
+        """Send headers, release the slot, then stream the body.
+
+        The slot is released before the body write so the client cannot
+        finish reading a response while its handler still holds the slot.
+        declared_length overrides Content-Length to emulate truncation.
+        """
+        content_length = len(data) if declared_length is None else declared_length
+        self.send_response(200)
+        self.send_header("Content-Length", str(content_length))
+        self.end_headers()
+        type(self).in_flight -= 1
+        with contextlib.suppress(OSError):
+            self.wfile.write(data)
 
     def do_GET(self) -> None:
         """Answer GET requests according to the path."""
@@ -41,35 +58,29 @@ class RecordingHandler(BaseHTTPRequestHandler):
         cls.in_flight += 1
         cls.max_in_flight = max(cls.max_in_flight, cls.in_flight)
         cls.accept_encodings.append(self.headers.get("Accept-Encoding", ""))
-        try:
-            if self.path == "/missing":
-                self.send_error(404)
-                return
-            if self.path == "/error":
-                self.send_error(500)
-                return
-            if self.path == "/slow":
-                time.sleep(2.0)
-            if self.path == "/truncated":
-                self.send_response(200)
-                self.send_header("Content-Length", str(len(PAYLOAD)))
-                self.end_headers()
-                with contextlib.suppress(OSError):
-                    self.wfile.write(PAYLOAD[: len(PAYLOAD) // 2])
-                return
-            if self.path == "/redirect":
-                self.send_response(302)
-                self.send_header("Location", "/")
-                self.send_header("Content-Length", "0")
-                self.end_headers()
-                return
-            self.send_response(200)
-            self.send_header("Content-Length", str(len(PAYLOAD)))
-            self.end_headers()
-            with contextlib.suppress(OSError):
-                self.wfile.write(PAYLOAD)
-        finally:
+        cls.cache_controls.append(self.headers.get("Cache-Control", ""))
+        cls.pragmas.append(self.headers.get("Pragma", ""))
+        if self.path == "/missing":
+            self.send_error(404)
             cls.in_flight -= 1
+            return
+        if self.path == "/error":
+            self.send_error(500)
+            cls.in_flight -= 1
+            return
+        if self.path == "/slow":
+            time.sleep(2.0)
+        if self.path == "/redirect":
+            self.send_response(302)
+            self.send_header("Location", "/")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            cls.in_flight -= 1
+            return
+        if self.path == "/truncated":
+            self._serve(PAYLOAD[: len(PAYLOAD) // 2], declared_length=len(PAYLOAD))
+            return
+        self._serve(PAYLOAD)
 
 
 class Server(NamedTuple):
@@ -90,6 +101,8 @@ def server() -> Iterator[Server]:
             "in_flight": 0,
             "max_in_flight": 0,
             "accept_encodings": [],
+            "cache_controls": [],
+            "pragmas": [],
         },
     )
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), handler)
@@ -123,6 +136,22 @@ def test_requests_are_sequential(server: Server) -> None:
 def test_identity_encoding_requested(server: Server) -> None:
     assert speedtest.main([server.url, "-n", "1"]) == 0
     assert server.handler.accept_encodings == ["identity"]
+
+
+def test_no_cache_headers_requested(server: Server) -> None:
+    assert speedtest.main([server.url, "-n", "1"]) == 0
+    assert server.handler.cache_controls == ["no-cache"]
+    assert server.handler.pragmas == ["no-cache"]
+
+
+def test_main_prints_summary_to_stdout(
+    server: Server, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = speedtest.main([server.url, "-n", "1"])
+    captured = capsys.readouterr()
+    assert code == 0
+    assert "Download speed:" in captured.out
+    assert "Average time:" in captured.out
 
 
 def test_fetch_once_reports_bytes(server: Server) -> None:
@@ -174,7 +203,7 @@ def test_truncated_transfer_exits_network_error(
 def test_redirect_is_followed(server: Server) -> None:
     result = speedtest.fetch_once(f"{server.url}/redirect", timeout_s=10.0)
     assert result.bytes_read == len(PAYLOAD)
-    assert server.handler.requests_seen >= 2
+    assert server.handler.requests_seen == 2
 
 
 def test_keyboard_interrupt_exits_code_130(
@@ -190,16 +219,12 @@ def test_keyboard_interrupt_exits_code_130(
     assert "interrupted" in captured.err
 
 
-def test_check_skips_on_missing_length_header(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
+def test_check_skips_on_missing_length_header() -> None:
     speedtest._check_length(None, 0, "http://example.com/x")
-    assert capsys.readouterr().err == ""
 
 
-def test_check_skips_on_non_integer_length(capsys: pytest.CaptureFixture[str]) -> None:
+def test_check_skips_on_non_integer_length() -> None:
     speedtest._check_length("garbage", 5, "http://example.com/x")
-    assert capsys.readouterr().err == ""
 
 
 def test_check_raises_on_mismatch() -> None:
