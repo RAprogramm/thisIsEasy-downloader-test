@@ -138,12 +138,11 @@ Tests never touch the external network: they run against a local
 `http.server` on the loopback interface, and `pytest-socket` blocks all other
 sockets suite-wide.
 
-## AI usage disclosure
+## AI usage
 
-The implementation was drafted by an AI coding agent (OpenCode) from a written
-specification, then reviewed and verified by the human author: manual runs
-against a real URL, cross-checked against `curl`, exit codes checked by hand,
-and every line is owned by the author. AI-assisted commits are not hidden.
+The code was drafted by an AI coding assistant from a written specification.
+The author reviewed every change and verified the result manually: real runs
+against a live URL, a cross-check against `curl`, and exit-code checks.
 
 ## License
 
