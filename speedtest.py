@@ -16,6 +16,7 @@ Example:
 from __future__ import annotations
 
 import argparse
+import http.client
 import sys
 import time
 import urllib.error
@@ -33,6 +34,7 @@ BYTES_PER_MEGABYTE = 1_000_000
 EXIT_OK = 0
 EXIT_NETWORK = 1
 EXIT_ARGS = 2
+EXIT_INTERRUPT = 130
 
 REQUEST_HEADERS = {
     "Accept-Encoding": "identity",
@@ -147,6 +149,8 @@ def fetch_once(url: str, timeout_s: float) -> RequestResult:
         raise SpeedtestError(f"timed out after {timeout_s:g}s: {url}") from exc
     except urllib.error.HTTPError as exc:
         raise SpeedtestError(f"HTTP error {exc.code} ({exc.reason}) for {url}") from exc
+    except http.client.HTTPException as exc:
+        raise SpeedtestError(f"invalid HTTP response for {url}: {exc}") from exc
     except urllib.error.URLError as exc:
         raise SpeedtestError(f"network error for {url}: {exc.reason}") from exc
     except OSError as exc:
@@ -313,7 +317,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     Returns:
         Process exit code: 0 on success, 1 on a network or HTTP failure,
-        2 on invalid arguments or URL.
+        2 on invalid arguments or URL, 130 on Ctrl+C interruption.
     """
     args = parse_args(argv)
     try:
@@ -326,6 +330,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     except SpeedtestError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_NETWORK
+    except KeyboardInterrupt:
+        print("interrupted", file=sys.stderr)
+        return EXIT_INTERRUPT
     print(format_report(compute(results)))
     return EXIT_OK
 

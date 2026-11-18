@@ -10,6 +10,8 @@ from __future__ import annotations
 import contextlib
 import threading
 import time
+import urllib.error
+import urllib.request
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import NamedTuple
@@ -48,6 +50,19 @@ class RecordingHandler(BaseHTTPRequestHandler):
                 return
             if self.path == "/slow":
                 time.sleep(2.0)
+            if self.path == "/truncated":
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(PAYLOAD)))
+                self.end_headers()
+                with contextlib.suppress(OSError):
+                    self.wfile.write(PAYLOAD[: len(PAYLOAD) // 2])
+                return
+            if self.path == "/redirect":
+                self.send_response(302)
+                self.send_header("Location", "/")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
             self.send_response(200)
             self.send_header("Content-Length", str(len(PAYLOAD)))
             self.end_headers()
@@ -146,12 +161,111 @@ def test_timeout_exits_network_error(
     assert "Traceback" not in captured.err
 
 
+def test_content_length_mismatch_warns_and_succeeds(
+    server: Server, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = speedtest.main([f"{server.url}/truncated", "-n", "1"])
+    captured = capsys.readouterr()
+    assert code == 0
+    assert "Content-Length says" in captured.err
+
+
+def test_redirect_is_followed(server: Server) -> None:
+    result = speedtest.fetch_once(f"{server.url}/redirect", timeout_s=10.0)
+    assert result.bytes_read == len(PAYLOAD)
+    assert server.handler.requests_seen >= 2
+
+
+def test_keyboard_interrupt_exits_code_130(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def raise_interrupt(url: str, timeout_s: float) -> speedtest.RequestResult:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(speedtest, "fetch_once", raise_interrupt)
+    code = speedtest.main(["http://example.com/x"])
+    captured = capsys.readouterr()
+    assert code == 130
+    assert "interrupted" in captured.err
+
+
+def test_warn_skips_on_missing_length_header(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    speedtest._warn_on_length_mismatch(None, 0, "http://example.com/x")
+    assert capsys.readouterr().err == ""
+
+
+def test_warn_skips_on_non_integer_length(capsys: pytest.CaptureFixture[str]) -> None:
+    speedtest._warn_on_length_mismatch("garbage", 5, "http://example.com/x")
+    assert capsys.readouterr().err == ""
+
+
 def test_invalid_scheme_exits_args_error() -> None:
     assert speedtest.main(["ftp://example.com/file"]) == 2
 
 
+def test_invalid_ipv6_bracket_exits_args_error() -> None:
+    assert speedtest.main(["http://["]) == 2
+
+
+def test_control_chars_in_host_exits_network_error(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    code = speedtest.main(["http://exa\nmple.com/x"])
+    captured = capsys.readouterr()
+    assert code == 1
+    assert "invalid HTTP response" in captured.err
+    assert "Traceback" not in captured.err
+
+
 def test_missing_host_exits_args_error() -> None:
     assert speedtest.main(["http:///file"]) == 2
+
+
+class _FakeResponse:
+    """Minimal HTTPResponse double for status and error paths."""
+
+    def __init__(self, status: int) -> None:
+        self.status = status
+        self.headers: dict[str, str] = {}
+
+    def __enter__(self) -> _FakeResponse:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+    def read(self, size: int = -1) -> bytes:
+        return b""
+
+
+def test_unexpected_status_raises_network_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        urllib.request, "urlopen", lambda request, timeout: _FakeResponse(304)
+    )
+    with pytest.raises(speedtest.SpeedtestError, match="unexpected HTTP status"):
+        speedtest.fetch_once("http://example.com/x", timeout_s=1.0)
+
+
+def test_url_error_becomes_network_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    def raise_url_error(request: urllib.request.Request, timeout: float) -> None:
+        raise urllib.error.URLError("getaddrinfo failed")
+
+    monkeypatch.setattr(urllib.request, "urlopen", raise_url_error)
+    with pytest.raises(speedtest.SpeedtestError, match="network error"):
+        speedtest.fetch_once("http://example.com/x", timeout_s=1.0)
+
+
+def test_os_error_becomes_connection_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    def raise_os_error(request: urllib.request.Request, timeout: float) -> None:
+        raise ConnectionError("Connection refused")
+
+    monkeypatch.setattr(urllib.request, "urlopen", raise_os_error)
+    with pytest.raises(speedtest.SpeedtestError, match="connection error"):
+        speedtest.fetch_once("http://127.0.0.1:1/x", timeout_s=1.0)
 
 
 def test_garbage_url_exits_args_error() -> None:
