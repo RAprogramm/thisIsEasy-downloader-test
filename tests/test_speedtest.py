@@ -161,13 +161,14 @@ def test_timeout_exits_network_error(
     assert "Traceback" not in captured.err
 
 
-def test_content_length_mismatch_warns_and_succeeds(
+def test_truncated_transfer_exits_network_error(
     server: Server, capsys: pytest.CaptureFixture[str]
 ) -> None:
     code = speedtest.main([f"{server.url}/truncated", "-n", "1"])
     captured = capsys.readouterr()
-    assert code == 0
-    assert "Content-Length says" in captured.err
+    assert code == 1
+    assert "truncated transfer" in captured.err
+    assert "Traceback" not in captured.err
 
 
 def test_redirect_is_followed(server: Server) -> None:
@@ -189,16 +190,21 @@ def test_keyboard_interrupt_exits_code_130(
     assert "interrupted" in captured.err
 
 
-def test_warn_skips_on_missing_length_header(
+def test_check_skips_on_missing_length_header(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    speedtest._warn_on_length_mismatch(None, 0, "http://example.com/x")
+    speedtest._check_length(None, 0, "http://example.com/x")
     assert capsys.readouterr().err == ""
 
 
-def test_warn_skips_on_non_integer_length(capsys: pytest.CaptureFixture[str]) -> None:
-    speedtest._warn_on_length_mismatch("garbage", 5, "http://example.com/x")
+def test_check_skips_on_non_integer_length(capsys: pytest.CaptureFixture[str]) -> None:
+    speedtest._check_length("garbage", 5, "http://example.com/x")
     assert capsys.readouterr().err == ""
+
+
+def test_check_raises_on_mismatch() -> None:
+    with pytest.raises(speedtest.SpeedtestError, match="truncated transfer"):
+        speedtest._check_length("100", 50, "http://example.com/x")
 
 
 def test_invalid_scheme_exits_args_error() -> None:

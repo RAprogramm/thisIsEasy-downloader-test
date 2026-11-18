@@ -58,7 +58,8 @@ class RequestResult:
 
     Attributes:
         bytes_read: Number of body bytes actually read from the socket.
-        elapsed_s: Seconds from sending the request to reading the last byte.
+        elapsed_s: Seconds from request start, including DNS, TCP, and TLS
+            connection setup, to the last byte read.
     """
 
     bytes_read: int
@@ -127,7 +128,8 @@ def fetch_once(url: str, timeout_s: float) -> RequestResult:
         RequestResult with the number of bytes read and the elapsed time.
 
     Raises:
-        SpeedtestError: Timeout, DNS, TLS, connection, or non-2xx status.
+        SpeedtestError: Timeout, DNS, TLS, connection, non-2xx status, or a
+            truncated transfer (Content-Length disagrees with bytes read).
     """
     request = urllib.request.Request(url, headers=REQUEST_HEADERS)
     started = time.perf_counter()
@@ -156,20 +158,25 @@ def fetch_once(url: str, timeout_s: float) -> RequestResult:
     except OSError as exc:
         raise SpeedtestError(f"connection error for {url}: {exc}") from exc
     elapsed = time.perf_counter() - started
-    _warn_on_length_mismatch(declared, total, url)
+    _check_length(declared, total, url)
     return RequestResult(bytes_read=total, elapsed_s=elapsed)
 
 
-def _warn_on_length_mismatch(declared: str | None, actual: int, url: str) -> None:
-    """Warn when Content-Length disagrees with the number of bytes read.
+def _check_length(declared: str | None, actual: int, url: str) -> None:
+    """Fail the request when Content-Length disagrees with the bytes read.
 
-    A mismatch usually means a truncated transfer, which would silently skew
-    the measurement.
+    A mismatch means a truncated transfer: the response is not complete, so
+    including it in the averages would misrepresent the measurement. Early
+    EOF while reading with a fixed chunk size does not raise by itself, so
+    this explicit comparison is the only reliable truncation detector.
 
     Args:
         declared: Raw Content-Length header value, if the server sent one.
         actual: Number of bytes actually read from the socket.
-        url: Request URL, used for the warning message.
+        url: Request URL, used for the error message.
+
+    Raises:
+        SpeedtestError: The declared length does not match the bytes read.
     """
     if declared is None:
         return
@@ -178,9 +185,9 @@ def _warn_on_length_mismatch(declared: str | None, actual: int, url: str) -> Non
     except ValueError:
         return
     if expected != actual:
-        print(
-            f"warning: {url}: Content-Length says {expected} bytes, read {actual}",
-            file=sys.stderr,
+        raise SpeedtestError(
+            f"truncated transfer for {url}: "
+            f"Content-Length says {expected} bytes, read {actual}"
         )
 
 
