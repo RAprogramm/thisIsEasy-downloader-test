@@ -10,6 +10,7 @@ dependencies = []
 [dependency-groups]
 dev = [
     "pytest==9.2.0",
+    "pytest-cov==7.1.0",
     "pytest-socket==0.8.1",
     "ruff==0.17.5",
     "mypy==2.4.1",
@@ -33,9 +34,14 @@ docstring-code-format = true
 
 [tool.pytest.ini_options]
 strict = true
-addopts = "--disable-socket --allow-hosts=127.0.0.1,::1"
+addopts = "--disable-socket --allow-hosts=127.0.0.1,::1 --cov=speedtest --cov-report=term-missing --cov-fail-under=100"
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.coverage.report]
+exclude_also = [
+    'if __name__ == "__main__":',
+]
 
 [tool.mypy]
 strict = true
