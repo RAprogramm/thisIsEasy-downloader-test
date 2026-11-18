@@ -71,7 +71,7 @@ Download speed:   133.72 Mbit/s (16.71 MB/s)
 | Quantity | Formula |
 | --- | --- |
 | `total_bytes` | sum of body bytes actually read from the socket |
-| `total_time` | sum of per-request times (request sent → last byte read) |
+| `total_time` | sum of per-request times, from request start (DNS, TCP, and TLS setup included) to the last byte read |
 | `avg_time` | `total_time / N` |
 | `speed` | `total_bytes * 8 / total_time / 1_000_000` Mbit/s |
 
@@ -91,12 +91,15 @@ Timings use `time.perf_counter()` (monotonic clock).
   avoid serving stale copies. A CDN may still answer from its cache — that is
   normal and still measures your last-mile link.
 - **Error policy: stop on first failure.** Any timeout, DNS, TLS, connection
-  error, or non-2xx status aborts the run with a clear message and no
-  traceback. Averaging a partial run would misrepresent the link.
+  error, non-2xx status, or truncated transfer aborts the run with a clear
+  message and no traceback. Averaging a partial run would misrepresent the
+  link.
 - **Exit codes:** `0` success, `1` network/HTTP error, `2` bad arguments or
   URL, `130` interrupted with Ctrl+C.
-- **Content-Length check:** if the header disagrees with the bytes read, a
-  warning is printed (sign of a truncated transfer).
+- **Content-Length check:** if the header disagrees with the bytes actually
+  read, the transfer is treated as truncated and the run stops with exit
+  code 1. Early EOF during chunked reading does not raise by itself, so this
+  explicit comparison is the only reliable truncation detector.
 - Redirects are followed (urllib default).
 
 ## Limitations and honest-measurement caveats
@@ -120,7 +123,13 @@ Install the dev dependencies once — with uv (`uv sync`) or plain pip
 pytest
 ```
 
-32 tests, no external network, ~5 s, 100% coverage enforced.
+33 tests, no external network, ~5 s. Bare `pytest` without these plugins
+fails on the CLI options, so install them first. The CI workflow enforces
+100% coverage; to check it locally, run:
+
+```bash
+pytest --cov=speedtest --cov-fail-under=100
+```
 
 Full lint, type-check, and test suite using [uv](https://docs.astral.sh/uv/):
 
