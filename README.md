@@ -3,6 +3,8 @@
 A small console tool that measures download speed of a URL by making 10
 sequential requests and reporting average time, total bytes, and speed.
 
+[![CI](https://github.com/RAprogramm/thisIsEasy-downloader-test/actions/workflows/ci.yml/badge.svg)](https://github.com/RAprogramm/thisIsEasy-downloader-test/actions/workflows/ci.yml)
+
 ## Requirements
 
 - Python 3.13+ (tested on 3.13, 3.14, 3.15)
@@ -11,8 +13,8 @@ sequential requests and reporting average time, total bytes, and speed.
 ## Quick start
 
 ```bash
-git clone https://github.com/RAprogramm/speedtest-cli.git
-cd speedtest-cli
+git clone https://github.com/RAprogramm/thisIsEasy-downloader-test.git
+cd thisIsEasy-downloader-test
 python speedtest.py <URL>
 ```
 
