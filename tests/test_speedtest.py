@@ -215,10 +215,14 @@ def test_invalid_ipv6_bracket_exits_args_error() -> None:
     assert speedtest.main(["http://["]) == 2
 
 
-def test_control_chars_in_host_exits_network_error(
+def test_control_chars_in_url_exits_args_error() -> None:
+    assert speedtest.main(["http://exa\nmple.com/x"]) == 2
+
+
+def test_nonnumeric_port_exits_network_error(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    code = speedtest.main(["http://exa\nmple.com/x"])
+    code = speedtest.main(["http://example.com:port/x"])
     captured = capsys.readouterr()
     assert code == 1
     assert "invalid HTTP response" in captured.err

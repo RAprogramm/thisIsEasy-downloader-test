@@ -97,8 +97,11 @@ def validate_url(url: str) -> str:
         The same URL string.
 
     Raises:
-        InvalidUrlError: The scheme is not http/https or the host is missing.
+        InvalidUrlError: The scheme is not http/https, the host is missing,
+            or the URL contains whitespace or control characters.
     """
+    if not url.isprintable() or " " in url:
+        raise InvalidUrlError(f"URL contains whitespace or control characters: {url!r}")
     try:
         parsed = urllib.parse.urlsplit(url)
     except ValueError as exc:
@@ -118,7 +121,9 @@ def fetch_once(url: str, timeout_s: float) -> RequestResult:
     The body is streamed in 64 KiB chunks until EOF, so files of any size are
     measured without growing memory usage. The response is requested with
     ``Accept-Encoding: identity`` so the byte count reflects the real content
-    instead of a compressed transfer.
+    instead of a compressed transfer. urlopen raises HTTPError for most
+    non-2xx statuses; the explicit status check remains as a guard for
+    openers that return one without raising.
 
     Args:
         url: Measurable URL (see validate_url).
